@@ -39,18 +39,42 @@ from common import *
 # Include cse 351 common Python files
 from cse351 import *
 
+class RequestKind(threading.Thread):
+    def __init__(self, film6, kind: str):
+        super().__init__()
+        self.film6 = film6
+        self.kind = kind
+        self.local_count = 0
+        self.urls = self.film6[self.kind]
+
+    def run(self):
+        url_threads = []
+        for url in self.urls:
+            self.local_count += 1
+            t = RequestURL(url)
+            t.start()
+            url_threads.append(t)
+
+        for t in url_threads:
+            t.join()
+
+
+class RequestURL(threading.Thread):
+    def __init__(self, url):
+        super().__init__()
+        self.url = url
+
+    def run(self):
+        item = get_data_from_server(self.url)
+        print(f'  - {item['name']}')
+
+
 # global
 call_count = 0
 
-def get_urls(film6, kind):
-    global call_count
-
+def get_urls(film6, kind, local_count):
     urls = film6[kind]
     print(kind)
-    for url in urls:
-        call_count += 1
-        item = get_data_from_server(url)
-        print(f'  - {item['name']}')
 
 def main():
     global call_count
@@ -62,12 +86,17 @@ def main():
     call_count += 1
     print_dict(film6)
 
-    # Retrieve people
-    get_urls(film6, 'characters')
-    get_urls(film6, 'planets')
-    get_urls(film6, 'starships')
-    get_urls(film6, 'vehicles')
-    get_urls(film6, 'species')
+    items = ['characters', 'planets', 'starships', 'vehicles', 'species']
+    threads = []
+
+    for item in items:
+        t = RequestKind(film6, item)
+        t.start()
+        threads.append(t)
+
+    for t in threads:
+        t.join()
+        call_count += t.local_count
 
     log.stop_timer('Total Time To complete')
     log.write(f'There were {call_count} calls to the server')
