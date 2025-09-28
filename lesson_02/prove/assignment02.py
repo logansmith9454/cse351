@@ -1,7 +1,9 @@
 """
 Course    : CSE 351
 Assignment: 02
-Student   : <your name here>
+Student   : Logan Smith
+Grade: 4
+Justification: My assignment meets all requirements. The program uses threading and processes all transactions correctly.
 
 Instructions:
     - review instructions in the course
