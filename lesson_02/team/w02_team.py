@@ -2,7 +2,7 @@
 Course: CSE 351 
 Lesson: L02 team activity
 File:   team.py
-Author: <Add name here>
+Author: Logan Smith
 
 Purpose: Retrieve Star Wars details from a server
 
@@ -30,7 +30,7 @@ TODO
     - join them all
 
 """
-
+from contextlib import nullcontext
 from datetime import datetime, timedelta
 import threading
 
@@ -40,18 +40,19 @@ from common import *
 from cse351 import *
 
 class RequestKind(threading.Thread):
-    def __init__(self, film6, kind: str):
+    def __init__(self, film6, kind: str, data):
         super().__init__()
         self.film6 = film6
         self.kind = kind
         self.local_count = 0
         self.urls = self.film6[self.kind]
+        self.data = data
 
     def run(self):
         url_threads = []
         for url in self.urls:
             self.local_count += 1
-            t = RequestURL(url)
+            t = RequestURL(url, self.kind, self.data)
             t.start()
             url_threads.append(t)
 
@@ -60,21 +61,20 @@ class RequestKind(threading.Thread):
 
 
 class RequestURL(threading.Thread):
-    def __init__(self, url):
+    def __init__(self, url, kind, data: dict[str, list[str]]):
         super().__init__()
         self.url = url
+        self.kind = kind
+        self.data = data
 
     def run(self):
         item = get_data_from_server(self.url)
-        print(f'  - {item['name']}')
+        self.data[self.kind].append(item)
+
 
 
 # global
 call_count = 0
-
-def get_urls(film6, kind, local_count):
-    urls = film6[kind]
-    print(kind)
 
 def main():
     global call_count
@@ -87,16 +87,25 @@ def main():
     print_dict(film6)
 
     items = ['characters', 'planets', 'starships', 'vehicles', 'species']
+    data = {kind: [] for kind in items}
+
+
     threads = []
 
     for item in items:
-        t = RequestKind(film6, item)
+        t = RequestKind(film6, item, data)
         t.start()
         threads.append(t)
 
     for t in threads:
         t.join()
         call_count += t.local_count
+
+    for kind in data:
+        print(kind, flush=True)
+        for item in data[kind]:
+            print(f'  - {item['name']}', flush=True)
+
 
     log.stop_timer('Total Time To complete')
     log.write(f'There were {call_count} calls to the server')
