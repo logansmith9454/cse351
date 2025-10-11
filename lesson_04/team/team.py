@@ -83,6 +83,7 @@ def consumer(que: Queue351, space_available: threading.Semaphore, items_availabl
             break
         elif is_prime(number):
             with file_lock:
+
                 with open(filename, 'a') as f:
                     f.write(f"{number}\n")
 

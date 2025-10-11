@@ -27,14 +27,14 @@ from cse351 import *
 
 from lesson_04.team.team import Queue351
 
-THREADS = 2
-WORKERS = 2 # 10
-RECORDS_TO_RETRIEVE = 10  # Don't change (5000)
+THREADS = 100
+WORKERS = 10
+RECORDS_TO_RETRIEVE = 5000  # Don't change
 MAX_QUEUE_SIZE = 10
 
 
 # ---------------------------------------------------------------------------
-def retrieve_weather_data(command_queue: Queue351, cq_space: threading.Semaphore, cq_items: threading.Semaphore, thread_barrier: threading.Barrier, data_queue: Queue351, dq_space: threading.Semaphore, dq_items: threading.Semaphore):
+def retrieve_weather_data(command_queue: Queue, cq_space: threading.Semaphore, cq_items: threading.Semaphore, thread_barrier: threading.Barrier, data_queue: Queue, dq_space: threading.Semaphore, dq_items: threading.Semaphore):
     while True:
         cq_items.acquire()
         command = command_queue.get()
@@ -46,7 +46,6 @@ def retrieve_weather_data(command_queue: Queue351, cq_space: threading.Semaphore
                     dq_space.acquire()
                     data_queue.put("Done")
                     dq_items.release()
-            print("Exiting command loop")
             break
 
         name, recno = command
@@ -65,16 +64,18 @@ def retrieve_weather_data(command_queue: Queue351, cq_space: threading.Semaphore
 class NOAA:
 
     def __init__(self):
-        self.data_dict_date: dict[str, list] = {}
+        # self.data_dict_date: dict[str, list] = {}
         self.data_dict_temp: dict[str, list] = {}
+        self.lock = threading.Lock()
 
     def store_data(self, name, date, temp):
-        if name not in self.data_dict_date:
-            self.data_dict_date[name] = [date]
-            self.data_dict_temp[name] = [temp]
-        else:
-            self.data_dict_date[name].append(date)
-            self.data_dict_temp[name].append(temp)
+        with self.lock:
+            if name not in self.data_dict_temp:
+                # self.data_dict_date[name] = [date]
+                self.data_dict_temp[name] = [temp]
+            else:
+                # self.data_dict_date[name].append(date)
+                self.data_dict_temp[name].append(temp)
 
     def get_temp_details(self, city):
         return sum(self.data_dict_temp[city])/RECORDS_TO_RETRIEVE
@@ -84,7 +85,7 @@ class NOAA:
 # ---------------------------------------------------------------------------
 class Worker(threading.Thread):
 
-    def __init__(self, noaa: NOAA, data_queue: Queue351, dq_space: threading.Semaphore, dq_items: threading.Semaphore, worker_barrier: threading.Barrier):
+    def __init__(self, noaa: NOAA, data_queue: Queue, dq_space: threading.Semaphore, dq_items: threading.Semaphore, worker_barrier: threading.Barrier):
         super().__init__()
         self.data_queue = data_queue
         self.dq_space = dq_space
@@ -99,7 +100,6 @@ class Worker(threading.Thread):
             self.dq_space.release()
             if data == "Done":
                 self.worker_barrier.wait()
-                print("Exiting data loop")
                 break
             name, date, temp = data
             self.noaa.store_data(name, date, temp)
@@ -160,11 +160,11 @@ def main():
 
     records = RECORDS_TO_RETRIEVE
 
-    command_queue = Queue351()
+    command_queue = Queue()
     cq_space = threading.Semaphore(MAX_QUEUE_SIZE)
     cq_items = threading.Semaphore(0)
 
-    data_queue = Queue351()
+    data_queue = Queue()
     dq_space = threading.Semaphore(MAX_QUEUE_SIZE)
     dq_items = threading.Semaphore(0)
 
@@ -187,6 +187,7 @@ def main():
     for _ in range(THREADS):
         cq_space.acquire()
         command_queue.put("Done")
+        cq_items.release()
 
     for t in retrieval_threads + workers:
         t.join()
