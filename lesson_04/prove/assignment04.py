@@ -8,7 +8,7 @@ Instructions:
 
 In order to retrieve a weather record from the server, Use the URL:
 
-f'{TOP_API_URL}/record/{name}/{recno}
+f'{TOP_API_URL}/record/{name}/{recno}'
 
 where:
 
@@ -16,36 +16,93 @@ name: name of the city
 recno: record number starting from 0
 
 """
-
+import threading
 import time
+from calendar import day_name
+from queue import Queue
+
 from common import *
 
 from cse351 import *
 
-THREADS = 0                 # TODO - set for your program
-WORKERS = 10
-RECORDS_TO_RETRIEVE = 5000  # Don't change
+from lesson_04.team.team import Queue351
+
+THREADS = 2
+WORKERS = 2 # 10
+RECORDS_TO_RETRIEVE = 10  # Don't change (5000)
+MAX_QUEUE_SIZE = 10
 
 
 # ---------------------------------------------------------------------------
-def retrieve_weather_data():
-    # TODO - fill out this thread function (and arguments)
-    ...
+def retrieve_weather_data(command_queue: Queue351, cq_space: threading.Semaphore, cq_items: threading.Semaphore, thread_barrier: threading.Barrier, data_queue: Queue351, dq_space: threading.Semaphore, dq_items: threading.Semaphore):
+    while True:
+        cq_items.acquire()
+        command = command_queue.get()
+        cq_space.release()
+
+        if command == "Done":
+            if thread_barrier.wait() == 0:
+                for _ in range(WORKERS):
+                    dq_space.acquire()
+                    data_queue.put("Done")
+                    dq_items.release()
+            print("Exiting command loop")
+            break
+
+        name, recno = command
+        url = f'{TOP_API_URL}/record/{name}/{recno}'
+        data = get_data_from_server(url)
+        date = data["date"]
+        temp = data["temp"]
+
+        dq_space.acquire()
+        data_queue.put((name, date, temp))
+        dq_items.release()
+
 
 
 # ---------------------------------------------------------------------------
-# TODO - Create Worker threaded class
-
-
-# ---------------------------------------------------------------------------
-# TODO - Complete this class
 class NOAA:
 
     def __init__(self):
-        ...
+        self.data_dict_date: dict[str, list] = {}
+        self.data_dict_temp: dict[str, list] = {}
+
+    def store_data(self, name, date, temp):
+        if name not in self.data_dict_date:
+            self.data_dict_date[name] = [date]
+            self.data_dict_temp[name] = [temp]
+        else:
+            self.data_dict_date[name].append(date)
+            self.data_dict_temp[name].append(temp)
 
     def get_temp_details(self, city):
-        return 0.0
+        return sum(self.data_dict_temp[city])/RECORDS_TO_RETRIEVE
+
+
+
+# ---------------------------------------------------------------------------
+class Worker(threading.Thread):
+
+    def __init__(self, noaa: NOAA, data_queue: Queue351, dq_space: threading.Semaphore, dq_items: threading.Semaphore, worker_barrier: threading.Barrier):
+        super().__init__()
+        self.data_queue = data_queue
+        self.dq_space = dq_space
+        self.dq_items = dq_items
+        self.noaa = noaa
+        self.worker_barrier = worker_barrier
+
+    def run(self):
+        while True:
+            self.dq_items.acquire()
+            data = self.data_queue.get()
+            self.dq_space.release()
+            if data == "Done":
+                self.worker_barrier.wait()
+                print("Exiting data loop")
+                break
+            name, date, temp = data
+            self.noaa.store_data(name, date, temp)
 
 
 # ---------------------------------------------------------------------------
@@ -103,9 +160,42 @@ def main():
 
     records = RECORDS_TO_RETRIEVE
 
-    # TODO - Create any queues, pipes, locks, barriers you need
+    command_queue = Queue351()
+    cq_space = threading.Semaphore(MAX_QUEUE_SIZE)
+    cq_items = threading.Semaphore(0)
+
+    data_queue = Queue351()
+    dq_space = threading.Semaphore(MAX_QUEUE_SIZE)
+    dq_items = threading.Semaphore(0)
+
+    thread_barrier = threading.Barrier(THREADS)
+    worker_barrier = threading.Barrier(WORKERS)
+
+    retrieval_threads = [threading.Thread(target=retrieve_weather_data, args=(command_queue, cq_space, cq_items, thread_barrier, data_queue, dq_space, dq_items)) for _ in range(THREADS)]
+
+    workers = [Worker(noaa, data_queue, dq_space, dq_items, worker_barrier) for _ in range(WORKERS)]
+
+    for t in retrieval_threads + workers:
+        t.start()
+
+    for city in CITIES:
+        for i in range(records):
+            cq_space.acquire()
+            command_queue.put((city, i))
+            cq_items.release()
+
+    for _ in range(THREADS):
+        cq_space.acquire()
+        command_queue.put("Done")
+
+    for t in retrieval_threads + workers:
+        t.join()
 
 
+    # Code to see what the data looks like
+    # url = f'{TOP_API_URL}/record/dallas/0'
+    # data = get_data_from_server(url)
+    # print(f"{data=}")
 
 
     # End server - don't change below
