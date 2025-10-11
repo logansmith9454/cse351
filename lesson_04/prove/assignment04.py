@@ -1,7 +1,14 @@
 """
 Course    : CSE 351
 Assignment: 04
-Student   : <your name here>
+Student   : Logan Smith
+Comment   : For this assignment I honestly can't tell if it meets the requirements or not.
+            I got it to run in about 80 seconds on my computer, but I can't tell if it's a hardware
+            problem or if there's something wrong with my code. I tried a lot of stuff, and I can't
+            get it to run any faster. If it is a hardware problem, and it actually can run faster,
+            then I think the grade should be a 4, as all requirements are met. If there is something
+            wrong with my code, and it cannot run faster, then my grade is a 3, as it works but not
+            fully as intended.
 
 Instructions:
     - review instructions in the course
